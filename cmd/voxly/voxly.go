@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"voxly/internal/api"
+	"github.com/oauthority/voxly-backend/internal/api"
 )
 
 // Our main entrypoint for the application; starts the HTTP server

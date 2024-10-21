@@ -1,7 +1,7 @@
 package api
 
 import (
-	"voxly/internal/api/handlers"
+	"github.com/oauthority/voxly-backend/internal/api/handlers"
 
 	"github.com/gorilla/mux"
 )
