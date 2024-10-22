@@ -6,6 +6,7 @@ import (
     "sync"
     "go.mongodb.org/mongo-driver/mongo"
     "go.mongodb.org/mongo-driver/mongo/options"
+    "log"
 )
 
 var (
@@ -17,18 +18,35 @@ var (
 // so that we may do funs stuff such as query, obviously!
 func GetClient() (*mongo.Client, error) {
     var err error
-    
+
     once.Do(func() {
         mongoURI := os.Getenv("MONGO_URI")
-        clientOptions := options.Client().ApplyURI(mongoURI)
+        username := os.Getenv("MONGO_USERNAME")
+        password := os.Getenv("MONGO_PASSWORD")
+
+        if mongoURI == "" || username == "" || password == "" {
+            log.Fatal("MongoDB URI, Username, or Password is not set in environment variables")
+        }
+
+        clientOptions := options.Client().ApplyURI(mongoURI).SetAuth(options.Credential{
+            Username: username,
+            Password: password,
+        })
+
         client, err = mongo.Connect(context.Background(), clientOptions)
+        if err != nil {
+            log.Fatal("Failed to connect to MongoDB:", err)
+        }
     })
-    
+
     return client, err
 }
 
 // Get access to specific collection (table) in the database
 func GetCollection(collectionName string) *mongo.Collection {
     dbName := os.Getenv("DB_NAME")
+    if dbName == "" {
+        log.Fatal("Database name is not set in environment variables")
+    }
     return client.Database(dbName).Collection(collectionName)
 }
