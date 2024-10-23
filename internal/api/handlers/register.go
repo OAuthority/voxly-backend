@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
-
+	"log"
 	"github.com/oauthority/voxly-backend/internal/database"
 	"github.com/oauthority/voxly-backend/internal/user"
 	"github.com/google/uuid"
@@ -54,7 +54,7 @@ func TryRegister(w http.ResponseWriter, r *http.Request) {
         },
     }).Decode(&existingUser)
 
-	if err != mongo.ErrNilDocument {
+	if err != mongo.ErrNoDocuments {
 		// there was no error, which indicates that the user was found
 		// which is a bit oxymoronic
 		if err == nil {
@@ -65,6 +65,7 @@ func TryRegister(w http.ResponseWriter, r *http.Request) {
 		// some other database error occured during the lookup
 		// return an error 
 		// @TODO: log what exactly the error was, obviously
+		log.Printf("Database error when checking for existing user: %v", err)
 		sendErrorResponse(w, "A database error occured, please try again later.", http.StatusInternalServerError)
 		return
 	}
@@ -75,6 +76,7 @@ func TryRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// some database error occured, don't let everyone know that it was when we tried to hash the password
 		// for safety reasons, ig.
+		log.Printf("Error hashing password: %v", err)
 		sendErrorResponse(w, "Internal server error. Please try again later", http.StatusInternalServerError)
 	}
 
@@ -95,6 +97,7 @@ func TryRegister(w http.ResponseWriter, r *http.Request) {
 
 	_, err = collection.InsertOne(context.Background(), newUser)
 	if err != nil {
+		log.Printf("Error inserting new user: %v", err)
 		sendErrorResponse(w, "Internal server error. Please try again later", http.StatusInternalServerError)
 		return
 	}
