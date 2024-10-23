@@ -23,7 +23,7 @@ func GetClient() (*mongo.Client, error) {
         mongoURI := os.Getenv("MONGO_URI")
         username := os.Getenv("MONGO_USERNAME")
         password := os.Getenv("MONGO_PASSWORD")
-
+       
         if mongoURI == "" || username == "" || password == "" {
             log.Fatal("MongoDB URI, Username, or Password is not set in environment variables")
         }
@@ -44,6 +44,15 @@ func GetClient() (*mongo.Client, error) {
 
 // Get access to specific collection (table) in the database
 func GetCollection(collectionName string) *mongo.Collection {
+    // lets get a client first, obviously >.<
+    if client == nil {
+        var err error
+        client, err = GetClient()
+        if err != nil {
+            log.Fatal("Failed to initialize MongoDB client:", err)
+        }
+    }
+
     dbName := os.Getenv("DB_NAME")
     if dbName == "" {
         log.Fatal("Database name is not set in environment variables")
