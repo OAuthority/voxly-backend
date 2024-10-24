@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
+	"github.com/google/uuid"
+	"github.com/oauthority/voxly-backend/internal/auth"
 	"github.com/oauthority/voxly-backend/internal/database"
+	"github.com/oauthority/voxly-backend/internal/redis"
 	"github.com/oauthority/voxly-backend/internal/user"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
@@ -22,16 +26,31 @@ type LoginRequest struct {
 // Struct for the response we will get back from the API
 // indicating whether or not we were successful
 type LoginResponse struct {
-	Success bool
-	Id      string
-	Token   string
+	Success     bool
+	Id          string
+	Token       string
+	SessionId   string `json:"sessionId"`
+	ExpiresAt   int64  `json:"expiresAt"`
+	TokenExpiry int64  `json:"tokenExpiry"`
+}
+
+// Dependnecy Injection
+type LoginHandler struct {
+	authManager *auth.AuthManager
+}
+
+// Get a new login handler
+func NewLoginHandler(authConfig auth.Config) *LoginHandler {
+	return &LoginHandler{
+		authManager: auth.NewAuthManager(authConfig),
+	}
 }
 
 // Try the login and return the result to the client,
 // or if there are any erorrs, return those to the client
 // so that they may be propergated to the user
 // for now just return an error whilst construction is underway
-func TryLogin(w http.ResponseWriter, r *http.Request) {
+func (h *LoginHandler) TryLogin(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -79,12 +98,40 @@ func TryLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Generate a JWT to send back to the frontend, sending an internal error if something
+	// goes wrong
+	token, tokenExpiry, err := h.authManager.GenerateJWT(user.Id)
+
+	if err != nil {
+		sendLoginError(w, http.StatusInternalServerError)
+		return
+	}
+
+	redisManager, err := redis.GetConnection()
+	if err != nil {
+		sendLoginError(w, http.StatusInternalServerError)
+	}
+
+	sessionId := uuid.New().String()
+	session, err := redisManager.CreateSession(
+		sessionId,
+		user.Id,
+		24*time.Hour,
+	)
+
+	if err != nil {
+		sendLoginError(w, http.StatusInternalServerError)
+	}
+
 	// send a bogus response for now since we will need to create a session in
 	// redis or something like that for persistence et al.
 	response := LoginResponse{
-		Success: true,
-		Id:      user.Id,
-		Token:   "12345",
+		Success:     true,
+		Id:          user.Id,
+		SessionId:   sessionId,
+		Token:       token,
+		ExpiresAt:   session.ExpiresAt.Unix(),
+		TokenExpiry: tokenExpiry.Unix(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -98,7 +145,5 @@ func sendLoginError(w http.ResponseWriter, status int) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(LoginResponse{
 		Success: false,
-		Id:      "",
-		Token:   "",
 	})
 }
